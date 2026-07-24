@@ -15,8 +15,22 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Beuna Jaya Kayu — SPK",
   description: "Sistem Pendukung Keputusan Pemilihan Kayu",
+  openGraph: {
+    title: "Beuna Jaya Kayu — SPK",
+    description: "Sistem Pendukung Keputusan Pemilihan Kayu Terbaik untuk Kebutuhan Anda",
+    url: "https://spk-beunajakayu.vercel.app",
+    siteName: "Beuna Jaya Kayu",
+    images: [
+      {
+        url: "/logo.png", // Memanggil logo.png di dalam folder public
+        width: 1200,
+        height: 630,
+        alt: "Logo Beuna Jaya Kayu",
+      },
+    ],
+    type: "website",
+  },
 };
-
 
 export default function RootLayout({
   children,
@@ -25,11 +39,11 @@ export default function RootLayout({
 }>) {
   return (
     // "en" → "id", tambahkan translate="no" agar Google Translate tidak menerjemahkan
-<html lang="id" translate="no">
-  <head>
-    {/* blokir Google Translate */}
-    <meta name="google" content="notranslate" />
-  </head>
+    <html lang="id" translate="no">
+      <head>
+        {/* blokir Google Translate */}
+        <meta name="google" content="notranslate" />
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
