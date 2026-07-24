@@ -18,11 +18,11 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Beuna Jaya Kayu — SPK",
     description: "Sistem Pendukung Keputusan Pemilihan Kayu Terbaik untuk Kebutuhan Anda",
-    url: "https://spk-beunajakayu.vercel.app",
+    url: "https://spk-beunajayakayu.vercel.app", // 
     siteName: "Beuna Jaya Kayu",
     images: [
       {
-        url: "/logo.png", // Memanggil logo.png di dalam folder public
+        url: "/logo.png",
         width: 1200,
         height: 630,
         alt: "Logo Beuna Jaya Kayu",
