@@ -2,24 +2,25 @@
 'use client'
 
 import { useState, FormEvent } from 'react'
-import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase/client'
 import Link from 'next/link'
 
 type Role = 'admin' | 'user'
 
 export default function RegisterPage() {
-  const router = useRouter()
   const [role, setRole] = useState<Role>('user')
   const [fullName, setFullName] = useState<string>('')
   const [email, setEmail] = useState<string>('')
   const [password, setPassword] = useState<string>('')
   const [confirmPassword, setConfirmPassword] = useState<string>('')
+  const [adminCode, setAdminCode] = useState<string>('')
   const [showPassword, setShowPassword] = useState<boolean>(false)
   const [showConfirm, setShowConfirm] = useState<boolean>(false)
+  const [showAdminCode, setShowAdminCode] = useState<boolean>(false)
   const [error, setError] = useState<string>('')
   const [success, setSuccess] = useState<boolean>(false)
   const [loading, setLoading] = useState<boolean>(false)
+  const [grantedRole, setGrantedRole] = useState<Role>('user') // role asli yang di-set server
 
   const getStrength = (pwd: string): { level: number; label: string; color: string } => {
     if (!pwd) return { level: 0, label: '', color: 'transparent' }
@@ -39,17 +40,35 @@ export default function RegisterPage() {
   const handleRegister = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setError('')
-    if (password !== confirmPassword) { setError('Password dan konfirmasi tidak cocok.'); return }
-    if (password.length < 8) { setError('Password minimal 8 karakter.'); return }
+
+    if (password !== confirmPassword) {
+      setError('Password dan konfirmasi tidak cocok.')
+      return
+    }
+    if (password.length < 8) {
+      setError('Password minimal 8 karakter.')
+      return
+    }
+    if (role === 'admin' && adminCode.trim() === '') {
+      setError('Kode admin wajib diisi untuk mendaftar sebagai Admin.')
+      return
+    }
+
     setLoading(true)
 
+    // Catatan penting:
+    // "requested_role" dan "admin_code" di sini HANYA permintaan dari client.
+    // Role FINAL yang sebenarnya ditentukan oleh trigger di database (server-side),
+    // bukan oleh nilai yang dikirim dari form ini. Ini mencegah orang membuat akun admin
+    // dengan cara memanggil supabase.auth.signUp() langsung dari luar aplikasi.
     const { data, error: signUpError } = await supabase.auth.signUp({
       email,
       password,
       options: {
         data: {
           full_name: fullName,
-          role: role,
+          requested_role: role,
+          admin_code: role === 'admin' ? adminCode.trim() : null,
         },
       },
     })
@@ -60,17 +79,25 @@ export default function RegisterPage() {
       return
     }
 
-    // Jika registrasi berhasil dan sesi langsung aktif (email confirmation disabled)
-    if (data.session) {
-      if (role === 'admin') {
-        router.push('/dashboard')
-      } else {
-        router.push('/')
-      }
-      return
-    }
+    // Ambil role SEBENARNYA dari tabel profiles (hasil keputusan server/trigger),
+    // bukan dari role yang dipilih user di form.
+    let actualRole: Role = 'user'
+    if (data.user) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', data.user.id)
+        .single()
 
-    // Jika butuh verifikasi email dulu
+      if (profile?.role === 'admin') actualRole = 'admin'
+    }
+    setGrantedRole(actualRole)
+
+    // Selalu tampilkan halaman sukses dengan tombol "Pergi ke Login",
+    // BAIK saat email confirmation aktif MAUPUN saat data.session langsung aktif.
+    // Ini sengaja tidak auto-redirect ke dashboard/home meskipun session sudah ada,
+    // supaya user login ulang secara eksplisit dan role-nya diverifikasi kembali
+    // lewat halaman login (single source of truth: tabel profiles).
     setSuccess(true)
     setLoading(false)
   }
@@ -87,28 +114,25 @@ export default function RegisterPage() {
       <line x1="1" y1="1" x2="23" y2="23"/>
     </svg>
   )
+  const LockIcon = () => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <rect x="3" y="11" width="18" height="11" rx="2"/>
+      <path d="M7 11V7a5 5 0 0110 0v4"/>
+    </svg>
+  )
 
   return (
     <>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,700;1,400&family=Lato:wght@300;400;700&display=swap');
 
-        :root {
-          --cream: #FAF6EF;
-          --bark: #3D2B1F;
-          --wood: #7C4A2D;
-          --honey: #C8892A;
-          --light: #F5EEE3;
-        }
-
         *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Lato', sans-serif; background: var(--bark); min-height: 100vh; }
+        body { font-family: 'Lato', sans-serif; background: #3D2B1F; min-height: 100vh; }
 
         .page { min-height: 100vh; display: flex; }
 
-        /* ══ LEFT PANEL ══ */
         .left {
-          flex: 1; background: var(--bark);
+          flex: 1; background: #3D2B1F;
           display: none; flex-direction: column;
           justify-content: space-between; padding: 52px;
           position: relative; overflow: hidden;
@@ -138,16 +162,15 @@ export default function RegisterPage() {
           width: 38px; height: 38px; border: 1px solid rgba(200,137,42,0.4);
           display: flex; align-items: center; justify-content: center;
         }
-        .l-logo-mark svg { width: 18px; height: 18px; color: var(--honey); }
-        .l-logo-name { font-family: 'Playfair Display', serif; font-size: 14px; font-weight: 500; color: var(--cream); }
+        .l-logo-mark svg { width: 18px; height: 18px; color: #C8892A; }
+        .l-logo-name { font-family: 'Playfair Display', serif; font-size: 14px; font-weight: 500; color: #FAF6EF; }
         .l-logo-sub { font-size: 9px; color: rgba(250,246,239,0.3); letter-spacing: 2px; text-transform: uppercase; margin-top: 2px; display: block; }
 
-        .l-heading { font-family: 'Playfair Display', serif; font-size: 36px; font-weight: 400; color: var(--cream); line-height: 1.15; }
-        .l-heading em { font-style: italic; color: var(--honey); display: block; }
+        .l-heading { font-family: 'Playfair Display', serif; font-size: 36px; font-weight: 400; color: #FAF6EF; line-height: 1.15; }
+        .l-heading em { font-style: italic; color: #C8892A; display: block; }
         .l-line { width: 44px; height: 1px; background: linear-gradient(90deg, rgba(200,137,42,0.6), transparent); margin: 20px 0; }
         .l-desc { font-size: 13px; font-weight: 300; color: rgba(250,246,239,0.38); line-height: 1.8; max-width: 290px; }
 
-        /* Role preview cards on left panel */
         .l-bottom { position: relative; z-index: 2; }
         .role-preview { display: flex; flex-direction: column; gap: 12px; }
         .role-prev-card {
@@ -179,10 +202,9 @@ export default function RegisterPage() {
         }
         .role-prev-dest svg { width: 10px; height: 10px; flex-shrink: 0; }
 
-        /* ══ RIGHT PANEL ══ */
         .right {
           width: 100%; max-width: 520px;
-          background: var(--cream);
+          background: #FAF6EF;
           display: flex; flex-direction: column; justify-content: center;
           padding: 56px 48px; position: relative; overflow-y: auto;
         }
@@ -194,10 +216,9 @@ export default function RegisterPage() {
           font-size: 11.5px; color: rgba(61,43,31,0.38);
           text-decoration: none; transition: color 0.2s;
         }
-        .back-btn:hover { color: var(--wood); }
+        .back-btn:hover { color: #7C4A2D; }
         .back-btn svg { width: 13px; height: 13px; }
 
-        /* Tabs */
         .page-tabs {
           display: flex; border: 1px solid rgba(61,43,31,0.1);
           margin-bottom: 28px; overflow: hidden;
@@ -208,21 +229,20 @@ export default function RegisterPage() {
           text-decoration: none; transition: all 0.2s;
           border: none; cursor: pointer; font-family: 'Lato', sans-serif;
         }
-        .page-tab.active { background: var(--bark); color: var(--cream); }
+        .page-tab.active { background: #3D2B1F; color: #FAF6EF; }
         .page-tab.inactive { background: transparent; color: rgba(61,43,31,0.4); }
-        .page-tab.inactive:hover { background: rgba(61,43,31,0.04); color: var(--bark); }
+        .page-tab.inactive:hover { background: rgba(61,43,31,0.04); color: #3D2B1F; }
 
         .r-eyebrow {
           font-size: 10px; font-weight: 700; letter-spacing: 2.5px; text-transform: uppercase;
-          color: var(--honey); margin-bottom: 9px; display: flex; align-items: center; gap: 8px;
+          color: #C8892A; margin-bottom: 9px; display: flex; align-items: center; gap: 8px;
         }
-        .r-eyebrow::before { content: ''; display: block; width: 18px; height: 1px; background: var(--honey); }
+        .r-eyebrow::before { content: ''; display: block; width: 18px; height: 1px; background: #C8892A; }
 
-        .r-title { font-family: 'Playfair Display', serif; font-size: 28px; font-weight: 400; color: var(--bark); line-height: 1.1; margin-bottom: 6px; }
-        .r-title em { font-style: italic; color: var(--wood); }
+        .r-title { font-family: 'Playfair Display', serif; font-size: 28px; font-weight: 400; color: #3D2B1F; line-height: 1.1; margin-bottom: 6px; }
+        .r-title em { font-style: italic; color: #7C4A2D; }
         .r-sub { font-size: 12.5px; font-weight: 300; color: rgba(61,43,31,0.42); line-height: 1.6; margin-bottom: 24px; }
 
-        /* ── ROLE SELECTOR ── */
         .role-label {
           font-size: 10px; font-weight: 700; letter-spacing: 1.8px; text-transform: uppercase;
           color: rgba(61,43,31,0.48); margin-bottom: 10px; display: block;
@@ -239,7 +259,7 @@ export default function RegisterPage() {
         }
         .role-card:hover { border-color: rgba(61,43,31,0.25); }
         .role-card.selected-admin {
-          border-color: var(--honey);
+          border-color: #C8892A;
           background: rgba(200,137,42,0.04);
           box-shadow: 0 0 0 3px rgba(200,137,42,0.08);
         }
@@ -256,7 +276,7 @@ export default function RegisterPage() {
           transition: all 0.2s;
         }
         .role-card.selected-admin .role-card-check {
-          background: var(--honey); border-color: var(--honey);
+          background: #C8892A; border-color: #C8892A;
         }
         .role-card.selected-user .role-card-check {
           background: #27AE60; border-color: #27AE60;
@@ -271,7 +291,7 @@ export default function RegisterPage() {
           border: 1px solid rgba(61,43,31,0.1);
           transition: all 0.2s;
         }
-        .role-card.selected-admin .role-card-icon { border-color: rgba(200,137,42,0.35); color: var(--honey); }
+        .role-card.selected-admin .role-card-icon { border-color: rgba(200,137,42,0.35); color: #C8892A; }
         .role-card.selected-user .role-card-icon { border-color: rgba(39,174,96,0.35); color: #27AE60; }
         .role-card-icon svg { width: 15px; height: 15px; color: rgba(61,43,31,0.35); transition: color 0.2s; }
         .role-card.selected-admin .role-card-icon svg,
@@ -279,7 +299,7 @@ export default function RegisterPage() {
 
         .role-card-name {
           font-size: 12px; font-weight: 700;
-          letter-spacing: 0.5px; color: var(--bark); margin-bottom: 3px;
+          letter-spacing: 0.5px; color: #3D2B1F; margin-bottom: 3px;
         }
         .role-card-desc {
           font-size: 10.5px; font-weight: 300;
@@ -293,12 +313,24 @@ export default function RegisterPage() {
           display: flex; align-items: center; gap: 4px;
           transition: color 0.2s;
         }
-        .role-card.selected-admin .role-card-dest { color: var(--honey); }
+        .role-card.selected-admin .role-card-dest { color: #C8892A; }
         .role-card.selected-user .role-card-dest { color: #27AE60; }
         .role-card:not(.selected-admin):not(.selected-user) .role-card-dest { color: rgba(61,43,31,0.3); }
         .role-card-dest svg { width: 9px; height: 9px; }
 
-        /* ── FORM ── */
+        .admin-code-box {
+          background: rgba(200,137,42,0.05);
+          border: 1px solid rgba(200,137,42,0.25);
+          padding: 14px 16px; margin-bottom: 22px;
+          animation: slin 0.25s ease;
+        }
+        .admin-code-hint {
+          display: flex; align-items: flex-start; gap: 8px;
+          font-size: 10.5px; font-weight: 300; color: rgba(61,43,31,0.5);
+          line-height: 1.6; margin-top: 8px;
+        }
+        .admin-code-hint svg { width: 12px; height: 12px; flex-shrink: 0; margin-top: 1px; color: #C8892A; }
+
         .fg { margin-bottom: 16px; }
         .flbl { display: block; font-size: 10px; font-weight: 700; letter-spacing: 1.8px; text-transform: uppercase; color: rgba(61,43,31,0.48); margin-bottom: 7px; }
         .iw { position: relative; }
@@ -306,12 +338,12 @@ export default function RegisterPage() {
           width: 100%; background: white;
           border: 1px solid rgba(61,43,31,0.1);
           border-bottom: 2px solid rgba(61,43,31,0.14);
-          color: var(--bark); font-family: 'Lato', sans-serif;
+          color: #3D2B1F; font-family: 'Lato', sans-serif;
           font-size: 14px; font-weight: 300; padding: 12px 14px; outline: none;
           transition: all 0.25s; -webkit-appearance: none;
         }
         .finput::placeholder { color: rgba(61,43,31,0.2); }
-        .finput:focus { border-bottom-color: var(--honey); box-shadow: 0 4px 14px rgba(61,43,31,0.06); }
+        .finput:focus { border-bottom-color: #C8892A; box-shadow: 0 4px 14px rgba(61,43,31,0.06); }
         .finput.pt { padding-right: 46px; }
         .finput.ok { border-bottom-color: #27AE60; }
         .finput.no { border-bottom-color: #C0392B; }
@@ -322,7 +354,7 @@ export default function RegisterPage() {
           color: rgba(61,43,31,0.22); padding: 4px;
           display: flex; align-items: center; transition: color 0.2s;
         }
-        .eye-btn:hover { color: var(--wood); }
+        .eye-btn:hover { color: #7C4A2D; }
         .eye-btn svg { width: 15px; height: 15px; }
 
         .str-wrap { margin-top: 7px; }
@@ -345,17 +377,16 @@ export default function RegisterPage() {
         .err-ico svg { width: 14px; height: 14px; }
         .err-txt { font-size: 12.5px; color: rgba(192,57,43,0.82); line-height: 1.5; }
 
-        /* ── SUBMIT BTN ── */
         .sbtn {
-          width: 100%; color: var(--cream);
+          width: 100%; color: #FAF6EF;
           font-family: 'Lato', sans-serif; font-size: 11px; font-weight: 700;
           letter-spacing: 2px; text-transform: uppercase;
           padding: 15px; border: none; cursor: pointer;
           display: flex; align-items: center; justify-content: center; gap: 8px;
           transition: all 0.25s; margin-top: 6px;
         }
-        .sbtn-admin { background: var(--bark); }
-        .sbtn-admin:hover:not(:disabled) { background: var(--wood); transform: translateY(-1px); box-shadow: 0 8px 26px rgba(61,43,31,0.2); }
+        .sbtn-admin { background: #3D2B1F; }
+        .sbtn-admin:hover:not(:disabled) { background: #7C4A2D; transform: translateY(-1px); box-shadow: 0 8px 26px rgba(61,43,31,0.2); }
         .sbtn-user { background: #27AE60; }
         .sbtn-user:hover:not(:disabled) { background: #219a52; transform: translateY(-1px); box-shadow: 0 8px 26px rgba(39,174,96,0.25); }
         .sbtn:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -364,12 +395,11 @@ export default function RegisterPage() {
 
         .spin {
           width: 13px; height: 13px;
-          border: 1.5px solid rgba(250,246,239,0.3); border-top-color: var(--cream);
+          border: 1.5px solid rgba(250,246,239,0.3); border-top-color: #FAF6EF;
           border-radius: 50%; animation: rot 0.7s linear infinite; display: inline-block;
         }
         @keyframes rot { to{transform:rotate(360deg)} }
 
-        /* ── SUCCESS ── */
         .success-box { text-align: center; padding: 28px 12px; animation: slin 0.4s ease; }
         .success-icon {
           width: 60px; height: 60px; margin: 0 auto 16px;
@@ -379,28 +409,34 @@ export default function RegisterPage() {
         }
         @keyframes popIn { from{transform:scale(0.7);opacity:0} to{transform:scale(1);opacity:1} }
         .success-icon svg { width: 26px; height: 26px; }
-        .success-title { font-family: 'Playfair Display', serif; font-size: 22px; color: var(--bark); margin-bottom: 10px; }
+        .success-title { font-family: 'Playfair Display', serif; font-size: 22px; color: #3D2B1F; margin-bottom: 10px; }
         .success-desc { font-size: 13px; font-weight: 300; color: rgba(61,43,31,0.5); line-height: 1.7; margin-bottom: 24px; }
-        .success-desc strong { font-weight: 700; color: var(--bark); }
+        .success-desc strong { font-weight: 700; color: #3D2B1F; }
 
-        /* role pill on success */
         .role-pill {
           display: inline-flex; align-items: center; gap: 6px;
           padding: 5px 12px; margin-bottom: 16px;
           font-size: 10px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase;
           border: 1px solid;
         }
-        .role-pill.admin { color: var(--honey); border-color: rgba(200,137,42,0.35); background: rgba(200,137,42,0.06); }
+        .role-pill.admin { color: #C8892A; border-color: rgba(200,137,42,0.35); background: rgba(200,137,42,0.06); }
         .role-pill.user { color: #27AE60; border-color: rgba(39,174,96,0.35); background: rgba(39,174,96,0.06); }
         .role-pill svg { width: 11px; height: 11px; }
+
+        .note-box {
+          text-align: left; font-size: 11.5px; font-weight: 300;
+          color: rgba(61,43,31,0.45); line-height: 1.6;
+          background: rgba(61,43,31,0.03); border: 1px solid rgba(61,43,31,0.08);
+          padding: 10px 14px; margin-bottom: 20px;
+        }
 
         .divider { display: flex; align-items: center; gap: 12px; margin: 18px 0; }
         .div-line { flex: 1; height: 1px; background: rgba(61,43,31,0.08); }
         .div-txt { font-size: 11px; color: rgba(61,43,31,0.28); white-space: nowrap; }
 
         .switch-row { text-align: center; font-size: 12.5px; color: rgba(61,43,31,0.45); font-weight: 300; }
-        .switch-row a { color: var(--wood); font-weight: 700; text-decoration: none; border-bottom: 1px solid rgba(124,74,45,0.3); transition: all 0.2s; }
-        .switch-row a:hover { color: var(--bark); border-bottom-color: var(--bark); }
+        .switch-row a { color: #7C4A2D; font-weight: 700; text-decoration: none; border-bottom: 1px solid rgba(124,74,45,0.3); transition: all 0.2s; }
+        .switch-row a:hover { color: #3D2B1F; border-bottom-color: #3D2B1F; }
 
         .r-foot { margin-top: 22px; padding-top: 18px; border-top: 1px solid rgba(61,43,31,0.07); text-align: center; font-size: 11px; color: rgba(61,43,31,0.25); }
       `}</style>
@@ -431,7 +467,7 @@ export default function RegisterPage() {
             <h2 className="l-heading">Pilih Peran<em>Anda</em></h2>
             <div className="l-line"/>
             <p className="l-desc">
-              Daftar sebagai <strong style={{color:'rgba(200,137,42,0.8)'}}>Admin</strong> untuk
+              Daftar sebagai <strong style={{color:'rgba(200,137,42,0.8)'}}>Admin</strong> (perlu kode akses) untuk
               mengelola sistem, atau sebagai <strong style={{color:'rgba(39,174,96,0.8)'}}>Pengguna</strong> untuk
               mendapatkan rekomendasi kayu terbaik.
             </p>
@@ -439,7 +475,6 @@ export default function RegisterPage() {
 
           <div className="l-bottom">
             <div className="role-preview">
-              {/* Admin card */}
               <div className={`role-prev-card${role === 'admin' ? ' highlighted' : ''}`}>
                 <div className="role-prev-icon">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -453,12 +488,11 @@ export default function RegisterPage() {
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <path d="M5 12h14M12 5l7 7-7 7"/>
                     </svg>
-                    Diarahkan ke Dashboard Admin
+                    Perlu kode admin yang valid
                   </div>
                 </div>
               </div>
 
-              {/* User card */}
               <div className={`role-prev-card${role === 'user' ? ' highlighted' : ''}`}>
                 <div className="role-prev-icon" style={{ color: role === 'user' ? 'rgba(39,174,96,0.7)' : undefined }}>
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -489,14 +523,12 @@ export default function RegisterPage() {
             Kembali ke Home
           </Link>
 
-          {/* Tabs */}
           <div className="page-tabs">
             <Link href="/login" className="page-tab inactive">Masuk</Link>
             <button className="page-tab active">Daftar</button>
           </div>
 
           {success ? (
-            /* ── SUCCESS STATE ── */
             <div className="success-box">
               <div className="success-icon">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
@@ -505,8 +537,8 @@ export default function RegisterPage() {
                 </svg>
               </div>
 
-              <div className={`role-pill ${role}`}>
-                {role === 'admin' ? (
+              <div className={`role-pill ${grantedRole}`}>
+                {grantedRole === 'admin' ? (
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
                     <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
@@ -517,22 +549,32 @@ export default function RegisterPage() {
                     <circle cx="12" cy="7" r="4"/>
                   </svg>
                 )}
-                {role === 'admin' ? 'Administrator' : 'Pengguna'}
+                {grantedRole === 'admin' ? 'Administrator' : 'Pengguna'}
               </div>
 
               <h2 className="success-title">Registrasi Berhasil!</h2>
               <p className="success-desc">
-                Akun <strong>{role === 'admin' ? 'Admin' : 'Pengguna'}</strong> untuk{' '}
-                <strong>{email}</strong> telah dibuat. Cek inbox email Anda untuk verifikasi
-                sebelum login.
-              </p>
-              <p className="success-desc" style={{ fontSize: 12, marginBottom: 20 }}>
-                Setelah verifikasi, Anda akan diarahkan ke{' '}
-                <strong>{role === 'admin' ? 'Dashboard Admin' : 'Halaman Home'}</strong>.
+                Akun untuk <strong>{email}</strong> telah dibuat sebagai{' '}
+                <strong>{grantedRole === 'admin' ? 'Admin' : 'Pengguna'}</strong>. Cek inbox email Anda
+                untuk verifikasi sebelum login.
               </p>
 
+              {role === 'admin' && grantedRole === 'user' && (
+                <p className="success-desc" style={{ fontSize: 12, color: '#C0392B' }}>
+                  Kode admin yang dimasukkan tidak valid, sehingga akun dibuat sebagai Pengguna biasa.
+                  Hubungi administrator sistem jika Anda memang berhak atas akses admin.
+                </p>
+              )}
+
+              <p className="success-desc" style={{ fontSize: 12, marginBottom: 20 }}>
+                Setelah verifikasi, silakan login untuk diarahkan ke{' '}
+                <strong>{grantedRole === 'admin' ? 'Dashboard Admin' : 'Halaman Home'}</strong>.
+              </p>
+
+              {/* Selalu arahkan ke /login, JANGAN auto-redirect ke dashboard/home,
+                  supaya role diverifikasi ulang lewat proses login yang query tabel profiles. */}
               <Link href="/login">
-                <button className={`sbtn ${role === 'admin' ? 'sbtn-admin' : 'sbtn-user'}`}
+                <button className={`sbtn ${grantedRole === 'admin' ? 'sbtn-admin' : 'sbtn-user'}`}
                   style={{ maxWidth: 260, margin: '0 auto' }}>
                   Pergi ke Login
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
@@ -549,10 +591,8 @@ export default function RegisterPage() {
 
               <form onSubmit={handleRegister}>
 
-                {/* ── ROLE SELECTOR ── */}
                 <span className="role-label">Pilih Peran Akun</span>
                 <div className="role-cards">
-                  {/* Admin */}
                   <button
                     type="button"
                     className={`role-card${role === 'admin' ? ' selected-admin' : ''}`}
@@ -579,7 +619,6 @@ export default function RegisterPage() {
                     </div>
                   </button>
 
-                  {/* User */}
                   <button
                     type="button"
                     className={`role-card${role === 'user' ? ' selected-user' : ''}`}
@@ -607,7 +646,36 @@ export default function RegisterPage() {
                   </button>
                 </div>
 
-                {/* Nama */}
+                {/* ── KODE ADMIN (muncul hanya jika role = admin) ── */}
+                {role === 'admin' && (
+                  <div className="admin-code-box">
+                    <label className="flbl" htmlFor="adminCode">Kode Admin</label>
+                    <div className="iw">
+                      <input
+                        id="adminCode"
+                        type={showAdminCode ? 'text' : 'password'}
+                        className="finput pt"
+                        placeholder="Masukkan kode akses admin"
+                        value={adminCode}
+                        onChange={e => setAdminCode(e.target.value)}
+                        required
+                        autoComplete="off"
+                      />
+                      <button type="button" className="eye-btn" onClick={() => setShowAdminCode(!showAdminCode)}>
+                        {showAdminCode ? <EyeOff/> : <EyeOpen/>}
+                      </button>
+                    </div>
+                    <div className="admin-code-hint">
+                      <LockIcon/>
+                      <span>
+                        Kode ini diberikan oleh admin/owner sistem. Kode diverifikasi di server —
+                        jika salah atau kosong, akun akan otomatis dibuat sebagai Pengguna biasa,
+                        bukan Admin.
+                      </span>
+                    </div>
+                  </div>
+                )}
+
                 <div className="fg">
                   <label className="flbl" htmlFor="fullName">Nama Lengkap</label>
                   <input id="fullName" type="text" className="finput"
@@ -615,7 +683,6 @@ export default function RegisterPage() {
                     onChange={e => setFullName(e.target.value)} required autoComplete="name"/>
                 </div>
 
-                {/* Email */}
                 <div className="fg">
                   <label className="flbl" htmlFor="email">Alamat Email</label>
                   <input id="email" type="email"
@@ -624,7 +691,6 @@ export default function RegisterPage() {
                     onChange={e => setEmail(e.target.value)} required autoComplete="email"/>
                 </div>
 
-                {/* Password */}
                 <div className="fg">
                   <label className="flbl" htmlFor="password">Password</label>
                   <div className="iw">
@@ -651,7 +717,6 @@ export default function RegisterPage() {
                   )}
                 </div>
 
-                {/* Konfirmasi Password */}
                 <div className="fg">
                   <label className="flbl" htmlFor="confirmPassword">Konfirmasi Password</label>
                   <div className="iw">

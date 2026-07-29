@@ -479,7 +479,7 @@ export default function HomePage() {
 
         <ul className={`nav-links${menuOpen ? ' open' : ''}`}>
           <li><a href="#home">Home</a></li>
-          <li><a href="#rekomendasi">Rekomendasi Kayu</a></li>
+          <li><Link href="/login">Rekomendasi Kayu</Link></li>
           <li><a href="#jenis-kayu">Jenis Kayu</a></li>
           <li><a href="#jenis-kayu">Kriteria Penilaian</a></li>
           <li><a href="#pesan">Pesan Kayu</a></li>
@@ -520,12 +520,12 @@ export default function HomePage() {
             yang paling sesuai — berdasarkan kekuatan, harga, ketahanan, dan ketersediaan.
           </p>
           <div className="hero-cta">
-            <a href="#rekomendasi" className="btn-primary">
+            <Link href="/login" className="btn-primary">
               Mulai Rekomendasi
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                 <path d="M5 12h14M12 5l7 7-7 7"/>
               </svg>
-            </a>
+            </Link>
             <a href="#jenis-kayu" className="btn-outline">Lihat Jenis Kayu</a>
           </div>
           <div className="hero-stats">
@@ -616,12 +616,12 @@ export default function HomePage() {
             berdasarkan kebutuhan spesifik proyek Anda.
           </p>
           <div className="cta-btns">
-            <a href="#rekomendasi" className="btn-primary">
+            <Link href="/login" className="btn-primary">
               Mulai Rekomendasi
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                 <path d="M5 12h14M12 5l7 7-7 7"/>
               </svg>
-            </a>
+            </Link>
             <a href="#tentang" className="btn-outline">Tentang Kami</a>
           </div>
         </div>

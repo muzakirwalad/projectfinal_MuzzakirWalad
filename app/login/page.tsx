@@ -27,9 +27,33 @@ export default function LoginPage() {
       return
     }
 
-    // ── Redirect berdasarkan role ──
-    const role = data.user?.user_metadata?.role
-    if (role === 'admin') {
+    if (!data.user) {
+      setError('Login gagal. Silakan coba lagi.')
+      setLoading(false)
+      return
+    }
+
+    // ── Ambil role SEBENARNYA dari tabel `profiles` (server-side source of truth) ──
+    // JANGAN pernah ambil role dari data.user.user_metadata, karena:
+    // 1. user_metadata hanya berisi apa yang dikirim client saat signup (requested_role,
+    //    admin_code), bukan keputusan final dari trigger/server.
+    // 2. user_metadata bisa direkayasa lewat supabase.auth.updateUser() dari browser,
+    //    sehingga kalau redirect bergantung padanya, siapa pun bisa "menipu" diri
+    //    sendiri jadi admin di sisi client (meski tetap tidak dapat akses data admin
+    //    sungguhan selama halaman/API admin juga memvalidasi role dari `profiles`).
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', data.user.id)
+      .single()
+
+    if (profileError) {
+      setError('Gagal memuat data profil. Silakan coba lagi.')
+      setLoading(false)
+      return
+    }
+
+    if (profile?.role === 'admin') {
       router.push('/admin/dashboard')
     } else {
       router.push('/user')
@@ -276,7 +300,7 @@ export default function LoginPage() {
 
           <div className="l-bottom">
             <p className="l-quote">
-              “Setiap jenis kayu punya karakter sendiri — tugas kami membantu Anda menemukan yang tepat.”
+              "Setiap jenis kayu punya karakter sendiri — tugas kami membantu Anda menemukan yang tepat."
             </p>
 
             <div className="redirect-cards">

@@ -520,7 +520,7 @@ export default function HomePage() {
             yang paling sesuai — berdasarkan kekuatan, harga, ketahanan, dan ketersediaan.
           </p>
           <div className="hero-cta">
-            <a href="#rekomendasi" className="btn-primary">
+            <a href="/login" className="btn-primary">
               Mulai Rekomendasi
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                 <path d="M5 12h14M12 5l7 7-7 7"/>
