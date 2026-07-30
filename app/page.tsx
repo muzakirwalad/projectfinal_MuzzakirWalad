@@ -1,4 +1,3 @@
-// app/page.tsx
 'use client'
 
 import { useState, useEffect, useRef, useMemo } from 'react'
@@ -70,13 +69,10 @@ export default function HomePage() {
   const [carouselIdx, setCarouselIdx] = useState(0)
   const sliderRef = useRef<HTMLDivElement>(null)
 
-  // Track gambar yang gagal load per-id, lewat React state (bukan mutasi DOM langsung).
-  // Ini memperbaiki bug "gambar muncul sebentar lalu hilang permanen": sebelumnya
-  // onError langsung men-set style.display di DOM node, yang tidak pernah di-reset
-  // React saat re-render berikutnya walau src-nya sama / valid.
+  // Tracking error gambar menggunakan URL spesifik sebagai Key
   const [imgErrors, setImgErrors] = useState<Record<string, boolean>>({})
-  const markImgError = (id: string) => {
-    setImgErrors(prev => (prev[id] ? prev : { ...prev, [id]: true }))
+  const markImgError = (urlKey: string) => {
+    setImgErrors(prev => (prev[urlKey] ? prev : { ...prev, [urlKey]: true }))
   }
 
   useEffect(() => {
@@ -99,6 +95,9 @@ export default function HomePage() {
         setDaftarKayu(kayuData)
         setDaftarKriteria(kriteriaData)
         setHasilSAW(calculateSAW(kayuData, kriteriaData))
+        
+        // Reset state error gambar saat data kayu baru terisi dari database
+        setImgErrors({})
       } catch (err) {
         console.error(err)
         setDaftarKayu(KAYU_DEFAULT)
@@ -193,78 +192,81 @@ export default function HomePage() {
     setCarouselIdx((prev) => (prev - 1 + daftarKayu.length) % daftarKayu.length)
   }
 
-  const features = [
-    {
-      icon: (
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4">
-          <path d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2v-4M9 21H5a2 2 0 01-2-2v-4m0 0h18"/>
-        </svg>
-      ),
-      title: 'Analisis Kriteria',
-      desc: 'Sistem mengevaluasi kayu berdasarkan kekuatan, harga, ketahanan, dan ketersediaan secara ilmiah.',
-    },
-    {
-      icon: (
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4">
-          <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
-        </svg>
-      ),
-      title: 'Rekomendasi Cerdas',
-      desc: 'Algoritma SPK memproses bobot kriteria dan menghasilkan rekomendasi terbaik sesuai kebutuhan.',
-    },
-    {
-      icon: (
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4">
-          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-        </svg>
-      ),
-      title: 'Data Terverifikasi',
-      desc: 'Seluruh data spesifikasi kayu diverifikasi oleh para ahli kehutanan dan konstruksi berpengalaman.',
-    },
-    {
-      icon: (
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4">
-          <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9,22 9,12 15,12 15,22"/>
-        </svg>
-      ),
-      title: 'Pemesanan Langsung',
-      desc: 'Setelah mendapat rekomendasi, pesan kayu langsung melalui sistem terintegrasi kami.',
-    },
-  ]
-
   const heroCards = useMemo(() => {
-    if (daftarKayu.length === 0) {
-      return [
-        { id: '1', cls: 'wcard wcard-c', img: '/images/kayu/pinus.jpg',    fallback: '#C4956A', ring: '#7C5730', name: 'Pinus',   grade: 'Ekonomis' },
-        { id: '2', cls: 'wcard wcard-b', img: '/meranti.jpg', fallback: '#A0714F', ring: '#5E3D26', name: 'Meranti', grade: 'Standar' },
-        { id: '3', cls: 'wcard wcard-a', img: '/images/kayu/jati.jpg',     fallback: '#6B3A2A', ring: '#3D2115', name: 'Jati',    grade: 'Premium' },
-      ]
-    }
+  if (daftarKayu.length === 0) {
+    return [
+      { id: '1', cls: 'wcard wcard-c', img: '', fallback: '#C4956A', ring: '#7C5730', name: 'Pinus', grade: 'Ekonomis' },
+      { id: '2', cls: 'wcard wcard-b', img: '', fallback: '#A0714F', ring: '#5E3D26', name: 'Meranti', grade: 'Standar' },
+      { id: '3', cls: 'wcard wcard-a', img: '', fallback: '#6B3A2A', ring: '#3D2115', name: 'Jati', grade: 'Premium' },
+    ]
+  }
 
-    const classes = ['wcard wcard-c', 'wcard wcard-b', 'wcard wcard-a']
-    const fallbacks = ['#C4956A', '#A0714F', '#6B3A2A']
-    const rings = ['#7C5730', '#5E3D26', '#3D2115']
+  const classes = ['wcard wcard-c', 'wcard wcard-b', 'wcard wcard-a']
+  const fallbacks = ['#C4956A', '#A0714F', '#6B3A2A']
+  const rings = ['#7C5730', '#5E3D26', '#3D2115']
 
-    const topItems = (hasilSAW.length > 0 ? hasilSAW : daftarKayu.map((k, i) => ({ kayuId: k.id, nama: k.nama, kode: k.kode, rank: i + 1, vi: 1 - i * 0.1, nilaiNormal: {} }))).slice(0, 3)
-    return topItems.map((item, idx) => {
-      const kayuObj = daftarKayu.find(k => k.id === item.kayuId)
-      return {
-        id: item.kayuId,
-        cls: classes[idx % 3],
-        img: kayuObj?.foto?.trim() || '',
-        fallback: fallbacks[idx % 3],
-        ring: rings[idx % 3],
-        name: item.nama,
-        grade: idx === 0 ? 'Rekomendasi Utama' : `Peringkat #${idx + 1}`,
-      }
-    })
-  }, [daftarKayu, hasilSAW])
+  const semuaHasil = hasilSAW.length > 0
+    ? hasilSAW
+    : daftarKayu.map((k, i) => ({ kayuId: k.id, nama: k.nama, kode: k.kode, rank: i + 1, vi: 1, nilaiNormal: {} }))
 
-  const galleryPhotos = [
-    { cls: 'gal-photo gal-a', img: '/images/galeri/serat-jati.jpg',  fallback: '#6B3A2A', ring: '#3D2115', label: 'Serat Kayu Jati' },
-    { cls: 'gal-photo gal-b', img: '/images/galeri/serat-ulin.webp', fallback: '#5C3317', ring: '#2D170B', label: 'Serat Kayu Ulin' },
-    { cls: 'gal-photo gal-c', img: '/images/galeri/serat-pinus.jpg', fallback: '#C4956A', ring: '#7C5730', label: 'Serat Kayu Pinus' },
+  // Prioritaskan kayu yang punya foto, urutkan tetap berdasarkan rank
+  const adaFoto = semuaHasil
+    .map(h => ({ h, kayuObj: daftarKayu.find(k => k.id === h.kayuId) }))
+    .filter(({ kayuObj }) => kayuObj?.foto)
+    .sort((a, b) => a.h.rank - b.h.rank)
+
+  const tanpaFoto = semuaHasil
+    .map(h => ({ h, kayuObj: daftarKayu.find(k => k.id === h.kayuId) }))
+    .filter(({ kayuObj }) => !kayuObj?.foto)
+    .sort((a, b) => a.h.rank - b.h.rank)
+
+  const topItems = [...adaFoto, ...tanpaFoto].slice(0, 3)
+
+  return topItems.map(({ h: item, kayuObj }, idx) => ({
+    id: item.kayuId,
+    cls: classes[idx % 3],
+    img: kayuObj?.foto || '',
+    fallback: fallbacks[idx % 3],
+    ring: rings[idx % 3],
+    name: item.nama,
+    grade: item.rank === 1 ? 'Rekomendasi Utama' : `Peringkat #${item.rank}`,
+  }))
+}, [daftarKayu, hasilSAW])
+
+  const galleryPhotos = useMemo(() => {
+  const defaultMeta = [
+    { cls: 'gal-photo gal-a', fallback: '#6B3A2A', ring: '#3D2115', label: 'Serat Kayu Jati', keywords: ['jati'] },
+    { cls: 'gal-photo gal-b', fallback: '#5C3317', ring: '#2D170B', label: 'Serat Kayu Ulin', keywords: ['ulin', 'besi'] },
+    { cls: 'gal-photo gal-c', fallback: '#C4956A', ring: '#7C5730', label: 'Serat Kayu Pinus', keywords: ['pinus'] },
   ]
+
+  // Kayu yang benar-benar punya foto di Supabase
+  const kayuBerFoto = daftarKayu.filter(k => k.foto && k.foto.trim())
+
+  const dipakai = new Set<string>()
+
+  const hasil = defaultMeta.map(meta => {
+    // 1. Coba cocokkan nama kayu sesuai keyword (jati/ulin/pinus)
+    let cocok = kayuBerFoto.find(
+      k => !dipakai.has(k.id) && meta.keywords.some(kw => k.nama.toLowerCase().includes(kw))
+    )
+    // 2. Kalau tidak ada yang cocok, pakai kayu manapun yang masih punya foto & belum dipakai
+    if (!cocok) {
+      cocok = kayuBerFoto.find(k => !dipakai.has(k.id))
+    }
+    if (cocok) dipakai.add(cocok.id)
+
+    return {
+      cls: meta.cls,
+      img: cocok?.foto || '',
+      fallback: meta.fallback,
+      ring: meta.ring,
+      label: cocok ? `Serat Kayu ${cocok.nama}` : meta.label,
+    }
+  })
+
+  return hasil
+}, [daftarKayu])
 
   const lokasi = {
     nama: 'Kilang Kayu Beuna Jaya',
@@ -612,49 +614,77 @@ export default function HomePage() {
           </div>
         </div>
 
+        {/* HERO CARDS VISUAL */}
         <div className="hero-visual">
-        <div className="card-stack">
-          {heroCards.map(c => (
-            <div className={c.cls} key={c.id || c.name}>
-              <div
-                className="wcard-top"
+  <div className="card-stack">
+    {heroCards.map((c, idx) => {
+      return (
+        <div 
+          className={c.cls} 
+          key={c.id || idx}
+          style={{
+            overflow: 'hidden',
+            display: 'flex',
+            flexDirection: 'column',
+          }}
+        >
+          {/* BAGIAN ATAS: GAMBAR */}
+          <div
+            className="wcard-top"
+            style={{
+              position: 'relative',
+              width: '100%',
+              height: '180px', // 👈 WAJIB ADA HEIGHT PASTI
+              backgroundColor: c.fallback,
+              overflow: 'hidden',
+            }}
+          >
+            {c.img ? (
+              <img
+                src={c.img}
+                alt={c.name}
                 style={{
-                  backgroundColor: c.fallback,
-                  position: 'relative',
-                  overflow: 'hidden',
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'cover', // 👈 Memastikan gambar tidak gepeng dan memenuhi box
+                  display: 'block',
+                  zIndex: 5,
+                }}
+              />
+            ) : (
+              /* Fallback jika URL gambar kosong */
+              <div
+                style={{
+                  width: '100%',
+                  height: '100%',
                   backgroundImage: `url(${ringPattern(c.fallback, c.ring)})`,
                   backgroundSize: 'cover',
-                  backgroundPosition: 'center',
                 }}
-              >
-                {c.img && !imgErrors[c.id] ? (
-                  <img
-                    src={c.img}
-                    alt={c.name}
-                    loading="lazy"
-                    style={{
-                      width: '100%',
-                      height: '100%',
-                      objectFit: 'cover',
-                      display: 'block',
-                      position: 'relative',
-                      zIndex: 1,
-                    }}
-                    onError={(e) => {
-                      // Mencegah trigger onError berturut-turut
-                      markImgError(c.id)
-                    }}
-                  />
-                ) : null}
-              </div>
-              <div className="wcard-bot">
-                <div className="wcard-name">{c.name}</div>
-                <div className="wcard-grade">{c.grade}</div>
-              </div>
-            </div>
-          ))}
+              />
+            )}
+          </div>
+
+          {/* BAGIAN BWAH: NAMA KAYU */}
+          <div 
+            className="wcard-bot" 
+            style={{ 
+              position: 'relative', 
+              zIndex: 10, 
+              backgroundColor: '#ffffff',
+              padding: '12px',
+            }}
+          >
+            <div className="wcard-name">{c.name}</div>
+            <div className="wcard-grade">{c.grade}</div>
+          </div>
         </div>
-      </div>
+      )
+    })}
+  </div>
+</div>
       </section>
 
       {/* CAROUSEL JENIS KAYU */}
@@ -679,6 +709,8 @@ export default function HomePage() {
           >
             {daftarKayu.map((k) => {
               const photo = k.foto?.trim()
+              const slideImgKey = photo ? `slide-${k.id}-${photo}` : `slide-fallback-${k.id}`
+
               return (
                 <div className="slide-card" key={k.id}>
                   <div
@@ -692,13 +724,13 @@ export default function HomePage() {
                       backgroundPosition: 'center',
                     }}
                   >
-                    {photo && !imgErrors[k.id] ? (
+                    {photo && !imgErrors[slideImgKey] ? (
                       <img
                         key={photo}
                         src={photo}
                         alt={k.nama}
                         style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', position: 'relative', zIndex: 1 }}
-                        onError={() => markImgError(k.id)}
+                        onError={() => markImgError(slideImgKey)}
                       />
                     ) : null}
                   </div>
@@ -921,19 +953,21 @@ export default function HomePage() {
           </div>
 
           <div className="gal-wrap">
-            {galleryPhotos.map(g => (
-              <div
-                key={g.label}
-                className={g.cls}
-                style={{
-                  backgroundColor: g.fallback,
-                  backgroundImage: `url(${g.img}), url(${ringPattern(g.fallback, g.ring)})`,
-                }}
-              >
-                <span className="gal-label">{g.label}</span>
-              </div>
-            ))}
-          </div>
+  {galleryPhotos.map(g => (
+    <div
+      key={g.label}
+      className={g.cls}
+      style={{
+        backgroundColor: g.fallback,
+        backgroundImage: g.img
+          ? `url(${g.img})`
+          : `url(${ringPattern(g.fallback, g.ring)})`,
+      }}
+    >
+      <span className="gal-label">{g.label}</span>
+    </div>
+  ))}
+</div>
         </div>
       </section>
 

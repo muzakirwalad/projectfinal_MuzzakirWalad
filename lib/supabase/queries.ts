@@ -113,7 +113,7 @@ function encodeFotoIntoDeskripsi(deskripsi: string, foto?: string): string {
 
 // ── Kayu ──────────────────────────────────────────────────────────────────────
 
-export async function fetchKayu(): Promise<Kayu[]> {
+export async function fetchKayu() {
   const { data, error } = await supabase
     .from('kayu')
     .select(`
@@ -122,24 +122,27 @@ export async function fetchKayu(): Promise<Kayu[]> {
     `)
     .order('kode', { ascending: true })
 
-  if (error) throw error
+  if (error) {
+    console.error('Error fetch kayu:', error)
+    throw error
+  }
 
-  return (data as KayuRow[]).map((row) => {
-    const { deskripsi, foto: rawFoto } = extractFotoAndDeskripsi(row.deskripsi, row.foto)
-    
-    let finalFotoUrl: string | undefined = undefined
-    
-    if (rawFoto) {
-      // Jika tersimpan URL lengkap (misal http/https), gunakan langsung
+  return (data || []).map((row) => {
+    let photoUrl = ''
+
+    if (row.foto) {
+      const rawFoto = String(row.foto).trim()
+      
+      // Jika di DB sudah tersimpan URL utuh (http/https)
       if (rawFoto.startsWith('http://') || rawFoto.startsWith('https://')) {
-        finalFotoUrl = rawFoto
+        photoUrl = rawFoto
       } else {
-        // Ambil Public URL resmi dari Supabase Storage bucket 'kayu-photos'
-        const { data: publicUrlData } = supabase.storage
+        // Generasi Public URL langsung dari nama file di Storage (misal: A1-1785426185520.jpg)
+        const { data: pUrl } = supabase.storage
           .from('kayu-photos')
           .getPublicUrl(rawFoto)
         
-        finalFotoUrl = publicUrlData.publicUrl
+        photoUrl = pUrl.publicUrl
       }
     }
 
@@ -147,10 +150,10 @@ export async function fetchKayu(): Promise<Kayu[]> {
       id: row.id,
       kode: row.kode,
       nama: row.nama,
-      deskripsi,
-      foto: finalFotoUrl,
+      deskripsi: row.deskripsi || '',
+      foto: photoUrl, // URL utuh Supabase Storage
       nilai: Object.fromEntries(
-        (row.nilai_kayu || []).map((n) => [n.kriteria_id, Number(n.nilai)])
+        (row.nilai_kayu || []).map((n: any) => [n.kriteria_id, Number(n.nilai)])
       ),
     }
   })
