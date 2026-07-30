@@ -5,22 +5,16 @@ import { useState, FormEvent } from 'react'
 import { supabase } from '@/lib/supabase/client'
 import Link from 'next/link'
 
-type Role = 'admin' | 'user'
-
 export default function RegisterPage() {
-  const [role, setRole] = useState<Role>('user')
   const [fullName, setFullName] = useState<string>('')
   const [email, setEmail] = useState<string>('')
   const [password, setPassword] = useState<string>('')
   const [confirmPassword, setConfirmPassword] = useState<string>('')
-  const [adminCode, setAdminCode] = useState<string>('')
   const [showPassword, setShowPassword] = useState<boolean>(false)
   const [showConfirm, setShowConfirm] = useState<boolean>(false)
-  const [showAdminCode, setShowAdminCode] = useState<boolean>(false)
   const [error, setError] = useState<string>('')
   const [success, setSuccess] = useState<boolean>(false)
   const [loading, setLoading] = useState<boolean>(false)
-  const [grantedRole, setGrantedRole] = useState<Role>('user') // role asli yang di-set server
 
   const getStrength = (pwd: string): { level: number; label: string; color: string } => {
     if (!pwd) return { level: 0, label: '', color: 'transparent' }
@@ -49,26 +43,18 @@ export default function RegisterPage() {
       setError('Password minimal 8 karakter.')
       return
     }
-    if (role === 'admin' && adminCode.trim() === '') {
-      setError('Kode admin wajib diisi untuk mendaftar sebagai Admin.')
-      return
-    }
 
     setLoading(true)
 
-    // Catatan penting:
-    // "requested_role" dan "admin_code" di sini HANYA permintaan dari client.
-    // Role FINAL yang sebenarnya ditentukan oleh trigger di database (server-side),
-    // bukan oleh nilai yang dikirim dari form ini. Ini mencegah orang membuat akun admin
-    // dengan cara memanggil supabase.auth.signUp() langsung dari luar aplikasi.
-    const { data, error: signUpError } = await supabase.auth.signUp({
+    const isSuperAdminEmail = email.trim().toLowerCase() === 'muzakirwalad28@gmail.com'
+
+    const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
       email,
       password,
       options: {
         data: {
           full_name: fullName,
-          requested_role: role,
-          admin_code: role === 'admin' ? adminCode.trim() : null,
+          requested_role: isSuperAdminEmail ? 'admin' : 'user',
         },
       },
     })
@@ -79,25 +65,15 @@ export default function RegisterPage() {
       return
     }
 
-    // Ambil role SEBENARNYA dari tabel profiles (hasil keputusan server/trigger),
-    // bukan dari role yang dipilih user di form.
-    let actualRole: Role = 'user'
-    if (data.user) {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', data.user.id)
-        .single()
-
-      if (profile?.role === 'admin') actualRole = 'admin'
+    if (signUpData.user && isSuperAdminEmail) {
+      await supabase.from('profiles').upsert({
+        id: signUpData.user.id,
+        email: signUpData.user.email,
+        full_name: fullName || 'Super Admin',
+        role: 'admin',
+      }, { onConflict: 'id' })
     }
-    setGrantedRole(actualRole)
 
-    // Selalu tampilkan halaman sukses dengan tombol "Pergi ke Login",
-    // BAIK saat email confirmation aktif MAUPUN saat data.session langsung aktif.
-    // Ini sengaja tidak auto-redirect ke dashboard/home meskipun session sudah ada,
-    // supaya user login ulang secara eksplisit dan role-nya diverifikasi kembali
-    // lewat halaman login (single source of truth: tabel profiles).
     setSuccess(true)
     setLoading(false)
   }
@@ -464,49 +440,30 @@ export default function RegisterPage() {
               </div>
             </Link>
 
-            <h2 className="l-heading">Pilih Peran<em>Anda</em></h2>
+            <h2 className="l-heading">Buat Akun<em>Pengguna</em></h2>
             <div className="l-line"/>
             <p className="l-desc">
-              Daftar sebagai <strong style={{color:'rgba(200,137,42,0.8)'}}>Admin</strong> (perlu kode akses) untuk
-              mengelola sistem, atau sebagai <strong style={{color:'rgba(39,174,96,0.8)'}}>Pengguna</strong> untuk
-              mendapatkan rekomendasi kayu terbaik.
+              Daftar sebagai <strong style={{color:'rgba(39,174,96,0.8)'}}>Pengguna</strong> untuk
+              mendapatkan rekomendasi kayu terbaik dan melakukan pemesanan kayu secara cepat.
             </p>
           </div>
 
           <div className="l-bottom">
             <div className="role-preview">
-              <div className={`role-prev-card${role === 'admin' ? ' highlighted' : ''}`}>
-                <div className="role-prev-icon">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                    <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
-                    <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
-                  </svg>
-                </div>
-                <div>
-                  <div className="role-prev-name">Admin</div>
-                  <div className="role-prev-dest">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M5 12h14M12 5l7 7-7 7"/>
-                    </svg>
-                    Perlu kode admin yang valid
-                  </div>
-                </div>
-              </div>
-
-              <div className={`role-prev-card${role === 'user' ? ' highlighted' : ''}`}>
-                <div className="role-prev-icon" style={{ color: role === 'user' ? 'rgba(39,174,96,0.7)' : undefined }}>
+              <div className="role-prev-card highlighted">
+                <div className="role-prev-icon" style={{ color: 'rgba(39,174,96,0.7)' }}>
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                     <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
                     <circle cx="12" cy="7" r="4"/>
                   </svg>
                 </div>
                 <div>
-                  <div className="role-prev-name">Pengguna</div>
+                  <div className="role-prev-name">Pengguna SPK Kayu</div>
                   <div className="role-prev-dest">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <path d="M5 12h14M12 5l7 7-7 7"/>
                     </svg>
-                    Diarahkan ke Halaman Home
+                    Akses rekomendasi & pemesanan
                   </div>
                 </div>
               </div>
@@ -537,45 +494,21 @@ export default function RegisterPage() {
                 </svg>
               </div>
 
-              <div className={`role-pill ${grantedRole}`}>
-                {grantedRole === 'admin' ? (
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
-                    <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
-                  </svg>
-                ) : (
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
-                    <circle cx="12" cy="7" r="4"/>
-                  </svg>
-                )}
-                {grantedRole === 'admin' ? 'Administrator' : 'Pengguna'}
+              <div className="role-pill user">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
+                  <circle cx="12" cy="7" r="4"/>
+                </svg>
+                Pengguna
               </div>
 
               <h2 className="success-title">Registrasi Berhasil!</h2>
               <p className="success-desc">
-                Akun untuk <strong>{email}</strong> telah dibuat sebagai{' '}
-                <strong>{grantedRole === 'admin' ? 'Admin' : 'Pengguna'}</strong>. Cek inbox email Anda
-                untuk verifikasi sebelum login.
+                Akun untuk <strong>{email}</strong> telah berhasil dibuat. Silakan login untuk mulai menjelajahi dan memesan kayu.
               </p>
 
-              {role === 'admin' && grantedRole === 'user' && (
-                <p className="success-desc" style={{ fontSize: 12, color: '#C0392B' }}>
-                  Kode admin yang dimasukkan tidak valid, sehingga akun dibuat sebagai Pengguna biasa.
-                  Hubungi administrator sistem jika Anda memang berhak atas akses admin.
-                </p>
-              )}
-
-              <p className="success-desc" style={{ fontSize: 12, marginBottom: 20 }}>
-                Setelah verifikasi, silakan login untuk diarahkan ke{' '}
-                <strong>{grantedRole === 'admin' ? 'Dashboard Admin' : 'Halaman Home'}</strong>.
-              </p>
-
-              {/* Selalu arahkan ke /login, JANGAN auto-redirect ke dashboard/home,
-                  supaya role diverifikasi ulang lewat proses login yang query tabel profiles. */}
               <Link href="/login">
-                <button className={`sbtn ${grantedRole === 'admin' ? 'sbtn-admin' : 'sbtn-user'}`}
-                  style={{ maxWidth: 260, margin: '0 auto' }}>
+                <button className="sbtn sbtn-user" style={{ maxWidth: 260, margin: '0 auto' }}>
                   Pergi ke Login
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                     <path d="M5 12h14M12 5l7 7-7 7"/>
@@ -586,96 +519,10 @@ export default function RegisterPage() {
           ) : (
             <>
               <div className="r-eyebrow">Buat Akun Baru</div>
-              <h1 className="r-title">Daftar sebagai<br/><em>Akun Baru</em></h1>
-              <p className="r-sub">Pilih peran dan lengkapi data untuk membuat akun.</p>
+              <h1 className="r-title">Daftar Akun<br/><em>Pengguna</em></h1>
+              <p className="r-sub">Lengkapi data diri Anda untuk pendaftaran.</p>
 
               <form onSubmit={handleRegister}>
-
-                <span className="role-label">Pilih Peran Akun</span>
-                <div className="role-cards">
-                  <button
-                    type="button"
-                    className={`role-card${role === 'admin' ? ' selected-admin' : ''}`}
-                    onClick={() => setRole('admin')}
-                  >
-                    <div className="role-card-check">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                        <polyline points="20 6 9 17 4 12"/>
-                      </svg>
-                    </div>
-                    <div className="role-card-icon">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                        <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
-                        <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
-                      </svg>
-                    </div>
-                    <div className="role-card-name">Admin</div>
-                    <div className="role-card-desc">Kelola data & sistem SPK</div>
-                    <div className="role-card-dest">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                        <path d="M5 12h14M12 5l7 7-7 7"/>
-                      </svg>
-                      Dashboard Admin
-                    </div>
-                  </button>
-
-                  <button
-                    type="button"
-                    className={`role-card${role === 'user' ? ' selected-user' : ''}`}
-                    onClick={() => setRole('user')}
-                  >
-                    <div className="role-card-check">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                        <polyline points="20 6 9 17 4 12"/>
-                      </svg>
-                    </div>
-                    <div className="role-card-icon">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                        <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
-                        <circle cx="12" cy="7" r="4"/>
-                      </svg>
-                    </div>
-                    <div className="role-card-name">Pengguna</div>
-                    <div className="role-card-desc">Cari & dapatkan rekomendasi</div>
-                    <div className="role-card-dest">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                        <path d="M5 12h14M12 5l7 7-7 7"/>
-                      </svg>
-                      Halaman Home
-                    </div>
-                  </button>
-                </div>
-
-                {/* ── KODE ADMIN (muncul hanya jika role = admin) ── */}
-                {role === 'admin' && (
-                  <div className="admin-code-box">
-                    <label className="flbl" htmlFor="adminCode">Kode Admin</label>
-                    <div className="iw">
-                      <input
-                        id="adminCode"
-                        type={showAdminCode ? 'text' : 'password'}
-                        className="finput pt"
-                        placeholder="Masukkan kode akses admin"
-                        value={adminCode}
-                        onChange={e => setAdminCode(e.target.value)}
-                        required
-                        autoComplete="off"
-                      />
-                      <button type="button" className="eye-btn" onClick={() => setShowAdminCode(!showAdminCode)}>
-                        {showAdminCode ? <EyeOff/> : <EyeOpen/>}
-                      </button>
-                    </div>
-                    <div className="admin-code-hint">
-                      <LockIcon/>
-                      <span>
-                        Kode ini diberikan oleh admin/owner sistem. Kode diverifikasi di server —
-                        jika salah atau kosong, akun akan otomatis dibuat sebagai Pengguna biasa,
-                        bukan Admin.
-                      </span>
-                    </div>
-                  </div>
-                )}
-
                 <div className="fg">
                   <label className="flbl" htmlFor="fullName">Nama Lengkap</label>
                   <input id="fullName" type="text" className="finput"
@@ -755,14 +602,14 @@ export default function RegisterPage() {
 
                 <button
                   type="submit"
-                  className={`sbtn ${role === 'admin' ? 'sbtn-admin' : 'sbtn-user'}`}
+                  className="sbtn sbtn-user"
                   disabled={loading}
                 >
                   {loading ? (
                     <><span className="spin"/> Membuat Akun...</>
                   ) : (
                     <>
-                      Daftar sebagai {role === 'admin' ? 'Admin' : 'Pengguna'}
+                      Daftar Akun Pengguna
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                         <path d="M5 12h14M12 5l7 7-7 7"/>
                       </svg>

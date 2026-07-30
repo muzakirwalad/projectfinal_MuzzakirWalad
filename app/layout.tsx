@@ -15,10 +15,15 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Beuna Jaya Kayu — SPK",
   description: "Sistem Pendukung Keputusan Pemilihan Kayu",
+  icons: {
+    icon: "/logo.png",
+    shortcut: "/logo.png",
+    apple: "/logo.png",
+  },
   openGraph: {
     title: "Beuna Jaya Kayu — SPK",
     description: "Sistem Pendukung Keputusan Pemilihan Kayu Terbaik untuk Kebutuhan Anda",
-    url: "https://spk-beunajayakayu.vercel.app", // 
+    url: "https://spk-beunajayakayu.vercel.app",
     siteName: "Beuna Jaya Kayu",
     images: [
       {

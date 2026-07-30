@@ -540,11 +540,9 @@ export default function UserPage() {
 
       {/* TOPBAR */}
       <nav className="nav">
-        <Link href="/" className="nav-brand">
-          <div className="nav-mark">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <path d="M12 2L3 9v11h6v-6h6v6h6V9z"/>
-            </svg>
+        <Link href="/user" className="nav-brand">
+          <div className="nav-mark" style={{ borderRadius: 6, overflow: 'hidden', background: 'transparent' }}>
+            <img src="/logo.png" alt="Logo Beuna Jaya Kayu" style={{ width: 28, height: 28, objectFit: 'contain', display: 'block' }} />
           </div>
           <div>
             <span className="nav-name">Beuna Jaya Kayu</span>

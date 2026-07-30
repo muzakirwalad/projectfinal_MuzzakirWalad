@@ -16,6 +16,7 @@ export interface Kayu {
   kode: string        // 'A1', 'A2', 'A3'
   nama: string
   deskripsi?: string
+  foto?: string
   nilai: Record<string, number>   // { C1: 3, C2: 3, ... }
 }
 
@@ -45,18 +46,21 @@ export const KAYU_DEFAULT: Kayu[] = [
     id: '11111111-1111-1111-1111-111111111111',
     kode: 'A1', nama: 'Kayu Meranti',
     deskripsi: 'Kayu komersial populer dari Sumatera & Kalimantan. Ringan-sedang, mudah dikerjakan.',
+    foto: 'https://images.unsplash.com/photo-1546484475-7f7bd55792da?w=800&auto=format&fit=crop',
     nilai: { C1: 3, C2: 3, C3: 1800000, C4: 4, C5: 4, C6: 3, C7: 3 },
   },
   {
     id: '22222222-2222-2222-2222-222222222222',
     kode: 'A2', nama: 'Kayu Merbau',
     deskripsi: 'Kayu keras tropis dengan serat indah. Tahan rayap, cocok untuk lantai & konstruksi.',
+    foto: 'https://images.unsplash.com/photo-1513694203232-719a280e022f?w=800&auto=format&fit=crop',
     nilai: { C1: 4, C2: 4, C3: 2800000, C4: 3, C5: 3, C6: 2, C7: 5 },
   },
   {
     id: '33333333-3333-3333-3333-333333333333',
     kode: 'A3', nama: 'Kayu Ulin/Besi',
     deskripsi: 'Kayu terkeras & terpadat di Indonesia. Sangat tahan air & serangga, umur panjang.',
+    foto: 'https://images.unsplash.com/photo-1589939705384-5185137a7f0f?w=800&auto=format&fit=crop',
     nilai: { C1: 5, C2: 5, C3: 4500000, C4: 2, C5: 2, C6: 1, C7: 4 },
   },
 ]

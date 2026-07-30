@@ -19,6 +19,7 @@ interface KayuRow {
   kode: string
   nama: string
   deskripsi: string | null
+  foto?: string | null
   nilai_kayu: { kriteria_id: string; nilai: number }[]
 }
 
@@ -86,49 +87,118 @@ export async function deleteKriteria(id: string): Promise<void> {
   if (error) throw error
 }
 
+// Helper parser foto & deskripsi untuk kompatibilitas schema DB
+function extractFotoAndDeskripsi(rawDeskripsi: string | null, rawFoto: string | null | undefined): { deskripsi: string; foto?: string } {
+  let foto = rawFoto || undefined
+  let deskripsi = rawDeskripsi || ''
+
+  if (!foto && deskripsi.includes('[IMG:')) {
+    const match = deskripsi.match(/\[IMG:(.*?)\]/)
+    if (match) {
+      foto = match[1].trim()
+      deskripsi = deskripsi.replace(/\[IMG:.*?\]/, '').trim()
+    }
+  }
+
+  return { deskripsi, foto }
+}
+
+function encodeFotoIntoDeskripsi(deskripsi: string, foto?: string): string {
+  const cleanDesc = deskripsi.replace(/\[IMG:.*?\]/, '').trim()
+  if (foto && foto.trim()) {
+    return `[IMG:${foto.trim()}] ${cleanDesc}`.trim()
+  }
+  return cleanDesc
+}
+
 // ── Kayu ──────────────────────────────────────────────────────────────────────
 
 export async function fetchKayu(): Promise<Kayu[]> {
   const { data, error } = await supabase
     .from('kayu')
     .select(`
-      id, kode, nama, deskripsi,
+      *,
       nilai_kayu ( kriteria_id, nilai )
     `)
     .order('kode', { ascending: true })
 
   if (error) throw error
 
-  return (data as KayuRow[]).map((row) => ({
-    id: row.id,
-    kode: row.kode,
-    nama: row.nama,
-    deskripsi: row.deskripsi ?? '',
-    nilai: Object.fromEntries(
-      row.nilai_kayu.map((n) => [n.kriteria_id, Number(n.nilai)])
-    ),
-  }))
+  return (data as KayuRow[]).map((row) => {
+    const { deskripsi, foto: rawFoto } = extractFotoAndDeskripsi(row.deskripsi, row.foto)
+    
+    let finalFotoUrl: string | undefined = undefined
+    
+    if (rawFoto) {
+      // Jika tersimpan URL lengkap (misal http/https), gunakan langsung
+      if (rawFoto.startsWith('http://') || rawFoto.startsWith('https://')) {
+        finalFotoUrl = rawFoto
+      } else {
+        // Ambil Public URL resmi dari Supabase Storage bucket 'kayu-photos'
+        const { data: publicUrlData } = supabase.storage
+          .from('kayu-photos')
+          .getPublicUrl(rawFoto)
+        
+        finalFotoUrl = publicUrlData.publicUrl
+      }
+    }
+
+    return {
+      id: row.id,
+      kode: row.kode,
+      nama: row.nama,
+      deskripsi,
+      foto: finalFotoUrl,
+      nilai: Object.fromEntries(
+        (row.nilai_kayu || []).map((n) => [n.kriteria_id, Number(n.nilai)])
+      ),
+    }
+  })
 }
 
 export async function upsertKayu(
   kayu: Kayu,
   nilaiMap: Record<string, number>
 ): Promise<void> {
-  // 1. Upsert baris kayu
+  // 1. Upsert baris kayu ke kolom foto
+  const payload: Record<string, unknown> = {
+    id: kayu.id,
+    kode: kayu.kode,
+    nama: kayu.nama,
+    deskripsi: kayu.deskripsi,
+    foto: kayu.foto || null,
+  }
+
+  let kayuId = kayu.id
   const { data: kayuData, error: kayuErr } = await supabase
     .from('kayu')
-    .upsert(
-      { id: kayu.id, kode: kayu.kode, nama: kayu.nama, deskripsi: kayu.deskripsi },
-      { onConflict: 'id' }
-    )
+    .upsert(payload, { onConflict: 'id' })
     .select('id')
     .single()
 
-  if (kayuErr) throw kayuErr
+  if (kayuErr) {
+    // Jika kolom foto belum ada di schema DB, fallback ke deskripsi
+    const errStr = (JSON.stringify(kayuErr) + (kayuErr.message || '')).toLowerCase()
+    if (errStr.includes('foto') || errStr.includes('column')) {
+      const embeddedDeskripsi = encodeFotoIntoDeskripsi(kayu.deskripsi ?? '', kayu.foto)
+      delete payload.foto
+      payload.deskripsi = embeddedDeskripsi
+      const { data: fallbackData, error: fallbackErr } = await supabase
+        .from('kayu')
+        .upsert(payload, { onConflict: 'id' })
+        .select('id')
+        .single()
 
-  const kayuId = kayuData?.id ?? kayu.id
+      if (fallbackErr) throw fallbackErr
+      kayuId = fallbackData?.id ?? kayu.id
+    } else {
+      throw kayuErr
+    }
+  } else {
+    kayuId = kayuData?.id ?? kayu.id
+  }
 
-  // 2. Upsert setiap nilai kriteria
+  // 2. Upsert nilai kriteria
   const nilaiRows = Object.entries(nilaiMap).map(([kriteria_id, nilai]) => ({
     kayu_id: kayuId,
     kriteria_id,

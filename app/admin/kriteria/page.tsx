@@ -242,10 +242,11 @@ export default function KriteriaPage() {
   }
 
   const navItems = [
-    { id: 'dashboard', label: 'Dashboard',        href: '/admin/dashboard',   icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg> },
-    { id: 'kayu',      label: 'Jenis Kayu',       href: '/admin/kayu',        icon: <IconWood /> },
-    { id: 'kriteria',  label: 'Kriteria & Bobot', href: '/admin/kriteria',    icon: <IconScale /> },
-    { id: 'pesanan',   label: 'Pesanan',          href: '/admin/pesanan',     icon: <IconBox /> },
+    { id: 'dashboard', label: 'Dashboard',            href: '/admin/dashboard', icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg> },
+    { id: 'kayu',      label: 'Jenis Kayu',           href: '/admin/kayu',      icon: <IconWood /> },
+    { id: 'kriteria',  label: 'Kriteria & Bobot',     href: '/admin/kriteria',  icon: <IconScale /> },
+    { id: 'pesanan',   label: 'Pesanan',               href: '/admin/pesanan',   icon: <IconBox /> },
+    { id: 'riwayat',   label: 'Riwayat Perhitungan',   href: '/admin/riwayat',   icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3 12a9 9 0 109-9 9.75 9.75 0 00-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg> },
   ]
 
   if (loading) {
@@ -376,7 +377,7 @@ export default function KriteriaPage() {
       <div className="dash-wrap">
         {/* Sidebar */}
         <aside className={`sidebar${sidebarOpen ? ' open' : ''}`}>
-          <Link href="/" className="sidebar-logo">
+          <Link href="/admin/dashboard" className="sidebar-logo">
             <div className="logo-mark"><IconWood/></div>
             <div>
               <span className="logo-name">Beuna Jaya Kayu</span>

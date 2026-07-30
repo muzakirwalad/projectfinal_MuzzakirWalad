@@ -114,6 +114,61 @@ export default function DashboardPage() {
   const [dataLoading, setDataLoading]     = useState<boolean>(true)
   const [dataError, setDataError]         = useState<string | null>(null)
 
+  // ── Pembuatan Akun Admin (Super Admin) ──
+  const [adminModalOpen, setAdminModalOpen] = useState<boolean>(false)
+  const [adminName, setAdminName]           = useState<string>('')
+  const [adminEmail, setAdminEmail]         = useState<string>('')
+  const [adminPassword, setAdminPassword]   = useState<string>('')
+  const [adminError, setAdminError]         = useState<string>('')
+  const [adminSuccess, setAdminSuccess]     = useState<string>('')
+  const [adminCreating, setAdminCreating]   = useState<boolean>(false)
+
+  const handleCreateAdmin = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setAdminError('')
+    setAdminSuccess('')
+    if (!adminName.trim() || !adminEmail.trim() || !adminPassword) {
+      setAdminError('Semua kolom wajib diisi.')
+      return
+    }
+    if (adminPassword.length < 8) {
+      setAdminError('Password minimal 8 karakter.')
+      return
+    }
+    setAdminCreating(true)
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email: adminEmail.trim(),
+        password: adminPassword,
+        options: {
+          data: {
+            full_name: adminName.trim(),
+            requested_role: 'admin',
+          },
+        },
+      })
+      if (error) throw error
+
+      if (data.user) {
+        await supabase.from('profiles').upsert({
+          id: data.user.id,
+          full_name: adminName.trim(),
+          email: adminEmail.trim(),
+          role: 'admin',
+        })
+      }
+
+      setAdminSuccess(`Akun Admin ${adminEmail.trim()} berhasil dibuat!`)
+      setAdminName('')
+      setAdminEmail('')
+      setAdminPassword('')
+    } catch (err: unknown) {
+      setAdminError(err instanceof Error ? err.message : 'Gagal membuat akun admin baru.')
+    } finally {
+      setAdminCreating(false)
+    }
+  }
+
   // ── Auth guard ──
   useEffect(() => {
     const checkUser = async () => {
@@ -398,11 +453,9 @@ export default function DashboardPage() {
       <div className="dash-wrap">
         {/* ── Sidebar ── */}
         <aside className={`sidebar${sidebarOpen ? ' open' : ''}`}>
-          <Link href="/" className="sidebar-logo">
-            <div className="logo-mark">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <path d="M12 2L3 9v11h6v-6h6v6h6V9z"/>
-              </svg>
+          <Link href="/admin/dashboard" className="sidebar-logo">
+            <div className="logo-mark" style={{ borderRadius: 6, overflow: 'hidden' }}>
+              <img src="/icon.svg" alt="Logo Beuna Jaya Kayu" style={{ width: 26, height: 26, display: 'block' }} />
             </div>
             <div>
               <span className="logo-name">Beuna Jaya Kayu</span>
@@ -452,6 +505,13 @@ export default function DashboardPage() {
               <span className="topbar-title">Dashboard Admin</span>
             </div>
             <div className="topbar-right">
+              <button
+                className="btn-refresh"
+                style={{ background: 'var(--honey)', color: '#000', fontWeight: 700, border: 'none', cursor: 'pointer' }}
+                onClick={() => { setAdminModalOpen(true); setAdminError(''); setAdminSuccess(''); }}
+              >
+                + Tambah Admin
+              </button>
               <span className="topbar-time">{formatTime(currentTime)}</span>
               <button
                 className={`btn-refresh${dataLoading ? ' spinning' : ''}`}
@@ -468,6 +528,97 @@ export default function DashboardPage() {
               </div>
             </div>
           </header>
+
+          {/* Modal Pembuatan Akun Admin Baru */}
+          {adminModalOpen && (
+            <div style={{
+              position: 'fixed', inset: 0, zIndex: 9999,
+              background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20
+            }}>
+              <div style={{
+                background: '#16110D', border: '1px solid rgba(200,137,42,0.3)',
+                borderRadius: 12, padding: 28, width: '100%', maxWidth: 440,
+                boxShadow: '0 20px 50px rgba(0,0,0,0.5)', color: 'var(--cream)'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
+                  <h3 style={{ fontFamily: 'Playfair Display, serif', fontSize: 20, color: 'var(--honey)' }}>Buat Akun Admin Baru</h3>
+                  <button
+                    onClick={() => setAdminModalOpen(false)}
+                    style={{ background: 'none', border: 'none', color: 'var(--text2)', cursor: 'pointer' }}
+                  >
+                    <IconClose/>
+                  </button>
+                </div>
+                <p style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 20 }}>
+                  Sebagai Super Admin, Anda dapat menambahkan akun administrator baru langsung dari panel ini.
+                </p>
+
+                {adminError && (
+                  <div style={{ background: 'rgba(231,76,60,0.15)', border: '1px solid rgba(231,76,60,0.3)', color: '#E74C3C', padding: '10px 14px', borderRadius: 6, fontSize: 13, marginBottom: 16 }}>
+                    {adminError}
+                  </div>
+                )}
+                {adminSuccess && (
+                  <div style={{ background: 'rgba(39,174,96,0.15)', border: '1px solid rgba(39,174,96,0.3)', color: '#27AE60', padding: '10px 14px', borderRadius: 6, fontSize: 13, marginBottom: 16 }}>
+                    {adminSuccess}
+                  </div>
+                )}
+
+                <form onSubmit={handleCreateAdmin}>
+                  <div style={{ marginBottom: 14 }}>
+                    <label style={{ display: 'block', fontSize: 11, textTransform: 'uppercase', letterSpacing: 1, color: 'var(--text2)', marginBottom: 6 }}>Nama Lengkap Admin</label>
+                    <input
+                      type="text"
+                      placeholder="Contoh: Admin Utama"
+                      value={adminName}
+                      onChange={e => setAdminName(e.target.value)}
+                      style={{ width: '100%', padding: '10px 14px', background: '#0E0A07', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', borderRadius: 6, fontSize: 13 }}
+                      required
+                    />
+                  </div>
+                  <div style={{ marginBottom: 14 }}>
+                    <label style={{ display: 'block', fontSize: 11, textTransform: 'uppercase', letterSpacing: 1, color: 'var(--text2)', marginBottom: 6 }}>Email Admin</label>
+                    <input
+                      type="email"
+                      placeholder="admin@beunajaya.com"
+                      value={adminEmail}
+                      onChange={e => setAdminEmail(e.target.value)}
+                      style={{ width: '100%', padding: '10px 14px', background: '#0E0A07', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', borderRadius: 6, fontSize: 13 }}
+                      required
+                    />
+                  </div>
+                  <div style={{ marginBottom: 20 }}>
+                    <label style={{ display: 'block', fontSize: 11, textTransform: 'uppercase', letterSpacing: 1, color: 'var(--text2)', marginBottom: 6 }}>Password (min 8 karakter)</label>
+                    <input
+                      type="password"
+                      placeholder="••••••••"
+                      value={adminPassword}
+                      onChange={e => setAdminPassword(e.target.value)}
+                      style={{ width: '100%', padding: '10px 14px', background: '#0E0A07', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', borderRadius: 6, fontSize: 13 }}
+                      required
+                    />
+                  </div>
+                  <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+                    <button
+                      type="button"
+                      onClick={() => setAdminModalOpen(false)}
+                      style={{ padding: '10px 18px', background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}
+                    >
+                      Batal
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={adminCreating}
+                      style={{ padding: '10px 20px', background: 'var(--honey)', border: 'none', color: '#000', fontWeight: 700, borderRadius: 6, cursor: 'pointer', fontSize: 13 }}
+                    >
+                      {adminCreating ? 'Membuat...' : 'Buat Admin'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
 
           <div className="content">
 
@@ -525,7 +676,7 @@ export default function DashboardPage() {
               <div className="panel">
                 <div className="panel-header">
                   <h2 className="panel-title">Hasil Perangkingan SAW</h2>
-                  <Link href="/admin/rekomendasi" className="panel-action">
+                  <Link href="/admin/riwayat" className="panel-action">
                     Lihat Detail <IconArrow/>
                   </Link>
                 </div>

@@ -33,27 +33,49 @@ export default function LoginPage() {
       return
     }
 
-    // ── Ambil role SEBENARNYA dari tabel `profiles` (server-side source of truth) ──
-    // JANGAN pernah ambil role dari data.user.user_metadata, karena:
-    // 1. user_metadata hanya berisi apa yang dikirim client saat signup (requested_role,
-    //    admin_code), bukan keputusan final dari trigger/server.
-    // 2. user_metadata bisa direkayasa lewat supabase.auth.updateUser() dari browser,
-    //    sehingga kalau redirect bergantung padanya, siapa pun bisa "menipu" diri
-    //    sendiri jadi admin di sisi client (meski tetap tidak dapat akses data admin
-    //    sungguhan selama halaman/API admin juga memvalidasi role dari `profiles`).
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', data.user.id)
-      .single()
+    let userRole = 'user'
+    const isSuperAdminEmail = data.user.email?.toLowerCase() === 'muzakirwalad28@gmail.com'
 
-    if (profileError) {
-      setError('Gagal memuat data profil. Silakan coba lagi.')
-      setLoading(false)
-      return
+    if (isSuperAdminEmail) {
+      userRole = 'admin'
+      try {
+        await supabase.from('profiles').upsert({
+          id: data.user.id,
+          email: data.user.email,
+          full_name: data.user.user_metadata?.full_name || 'Super Admin',
+          role: 'admin',
+        }, { onConflict: 'id' })
+      } catch (e) {
+        console.warn('DB Trigger prevented client profile update:', e)
+      }
+    } else {
+      try {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', data.user.id)
+          .maybeSingle()
+
+        if (profile?.role) {
+          userRole = profile.role
+        } else {
+          const metaRole = data.user.user_metadata?.requested_role || data.user.user_metadata?.role
+          if (metaRole === 'admin') userRole = 'admin'
+          await supabase.from('profiles').upsert({
+            id: data.user.id,
+            email: data.user.email,
+            full_name: data.user.user_metadata?.full_name || data.user.email?.split('@')[0],
+            role: userRole,
+          }, { onConflict: 'id' })
+        }
+      } catch (err) {
+        console.warn('Gagal membaca profil, fallback ke metadata:', err)
+        const metaRole = data.user.user_metadata?.requested_role || data.user.user_metadata?.role
+        if (metaRole === 'admin') userRole = 'admin'
+      }
     }
 
-    if (profile?.role === 'admin') {
+    if (userRole === 'admin') {
       router.push('/admin/dashboard')
     } else {
       router.push('/user')

@@ -82,6 +82,7 @@ type FormState = {
   kode: string
   nama: string
   deskripsi: string
+  foto: string
   nilai: Record<string, string>
 }
 
@@ -89,6 +90,7 @@ const emptyForm = (kriteria: Kriteria[]): FormState => ({
   kode: '',
   nama: '',
   deskripsi: '',
+  foto: '',
   nilai: kriteria.reduce((acc, k) => ({ ...acc, [k.id]: '' }), {} as Record<string, string>),
 })
 
@@ -114,6 +116,9 @@ export default function KayuPage() {
 
   const [deleteTarget, setDeleteTarget] = useState<Kayu | null>(null)
   const [deleting, setDeleting]         = useState(false)
+
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
 
   // ── Auth guard ──
   useEffect(() => {
@@ -188,6 +193,7 @@ export default function KayuPage() {
       kode: kayu.kode,
       nama: kayu.nama,
       deskripsi: kayu.deskripsi ?? '',
+      foto: kayu.foto ?? '',
       nilai: daftarKriteria.reduce(
         (acc, k) => ({ ...acc, [k.id]: String(kayu.nilai[k.id] ?? '') }),
         {} as Record<string, string>
@@ -199,6 +205,57 @@ export default function KayuPage() {
   }
 
   const closeModal = () => { if (saving) return; setModalOpen(false) }
+
+  const handleFotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const file = e.target.files?.[0]
+  if (!file) return
+
+  // Validasi tipe & ukuran file
+  const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg']
+  if (!allowedTypes.includes(file.type)) {
+    setUploadError('Format file harus JPG, PNG, atau WEBP.')
+    return
+  }
+  const maxSizeMB = 5
+  if (file.size > maxSizeMB * 1024 * 1024) {
+    setUploadError(`Ukuran file maksimal ${maxSizeMB}MB.`)
+    return
+  }
+
+  setUploading(true)
+  setUploadError(null)
+
+  try {
+    // Nama file unik: timestamp + nama asli (sanitized)
+    const ext = file.name.split('.').pop()
+    const safeName = form.kode.trim() || 'kayu'
+    const fileName = `${safeName}-${Date.now()}.${ext}`
+    const filePath = `${fileName}`
+
+    const { error: uploadErr } = await supabase.storage
+      .from('kayu-photos')
+      .upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: false,
+      })
+
+    if (uploadErr) throw uploadErr
+
+    // Ambil public URL dari file yang baru diupload
+    const { data: publicUrlData } = supabase.storage
+      .from('kayu-photos')
+      .getPublicUrl(filePath)
+
+    // Otomatis isi form.foto dengan URL hasil upload
+    setForm((prev) => ({ ...prev, foto: publicUrlData.publicUrl }))
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err)
+    setUploadError(`Gagal upload foto: ${msg}`)
+    console.error(err)
+  } finally {
+    setUploading(false)
+  }
+}
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -227,18 +284,18 @@ export default function KayuPage() {
         kode: form.kode.trim(),
         nama: form.nama.trim(),
         deskripsi: form.deskripsi.trim(),
+        foto: form.foto.trim() || undefined,
         nilai: nilaiNumeric,
       }
       await upsertKayu(kayuPayload, nilaiNumeric)
       setModalOpen(false)
       await loadData()   // re-fetch untuk sinkron dengan DB
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Gagal menyimpan data.'
-      // Cek duplikasi kode (unique constraint)
+      const msg = err instanceof Error ? err.message : String(err)
       if (msg.includes('unique') || msg.includes('duplicate')) {
         setFormError(`Kode "${form.kode}" sudah digunakan. Pilih kode lain.`)
       } else {
-        setFormError('Gagal menyimpan data ke database. Silakan coba lagi.')
+        setFormError(`Gagal menyimpan data: ${msg || 'Silakan coba lagi.'}`)
       }
       console.error(err)
     } finally {
@@ -401,7 +458,7 @@ export default function KayuPage() {
       <div className="dash-wrap">
         {/* Sidebar */}
         <aside className={`sidebar${sidebarOpen ? ' open' : ''}`}>
-          <Link href="/" className="sidebar-logo">
+          <Link href="/admin/dashboard" className="sidebar-logo">
             <div className="logo-mark"><IconWood/></div>
             <div>
               <span className="logo-name">Beuna Jaya Kayu</span>
@@ -564,6 +621,70 @@ export default function KayuPage() {
                 </div>
 
                 <div className="form-row">
+                  <label className="form-label">Foto Kayu</label>
+
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={handleFotoUpload}
+                    disabled={uploading}
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      background: 'var(--surface2)',
+                      border: '1px solid var(--border2)',
+                      color: 'var(--cream)',
+                      fontSize: 13,
+                    }}
+                  />
+
+                  {uploading && (
+                    <p style={{ fontSize: 11.5, color: 'var(--honey)', marginTop: 6 }}>
+                      <span className="spin" style={{ marginRight: 6, verticalAlign: 'middle' }} />
+                      Mengupload foto...
+                    </p>
+                  )}
+
+                  {uploadError && (
+                    <p style={{ fontSize: 11.5, color: '#E88B82', marginTop: 6 }}>{uploadError}</p>
+                  )}
+
+                  {form.foto && !uploading && (
+                    <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <img
+                        src={form.foto}
+                        alt="Preview"
+                        style={{ width: 64, height: 64, objectFit: 'cover', border: '1px solid var(--border2)' }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setForm({ ...form, foto: '' })}
+                        style={{
+                          background: 'none', border: '1px solid var(--border2)', color: 'var(--text2)',
+                          fontSize: 11, padding: '6px 10px', cursor: 'pointer',
+                        }}
+                      >
+                        Hapus Foto
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Fallback manual, kalau admin mau paste URL langsung tanpa upload */}
+                  <details style={{ marginTop: 8 }}>
+                    <summary style={{ fontSize: 11, color: 'var(--text3)', cursor: 'pointer' }}>
+                      Atau masukkan URL foto manual
+                    </summary>
+                    <input
+                      className="form-input"
+                      style={{ marginTop: 8 }}
+                      placeholder="https://... atau /images/kayu/jati.jpg"
+                      value={form.foto}
+                      onChange={(e) => setForm({ ...form, foto: e.target.value })}
+                    />
+                  </details>
+                </div>
+
+                <div className="form-row">
                   <label className="form-label">Deskripsi</label>
                   <textarea
                     className="form-textarea"
@@ -598,9 +719,9 @@ export default function KayuPage() {
                 <button type="button" className="btn-secondary" onClick={closeModal} disabled={saving}>
                   Batal
                 </button>
-                <button type="submit" className="btn-primary" disabled={saving}>
-                  {saving ? 'Menyimpan...' : isEdit ? 'Simpan Perubahan' : 'Tambah Kayu'}
-                </button>
+                <button type="submit" className="btn-primary" disabled={saving || uploading}>
+                {saving ? 'Menyimpan...' : isEdit ? 'Simpan Perubahan' : 'Tambah Kayu'}
+              </button>
               </div>
             </form>
           </div>

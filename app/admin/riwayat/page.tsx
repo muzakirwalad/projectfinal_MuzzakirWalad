@@ -364,7 +364,7 @@ export default function RiwayatPage() {
       <div className="dash-wrap">
         {/* ── Sidebar ── */}
         <aside className={`sidebar${sidebarOpen ? ' open' : ''}`}>
-          <Link href="/" className="sidebar-logo">
+          <Link href="/admin/dashboard" className="sidebar-logo">
             <div className="logo-mark">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                 <path d="M12 2L3 9v11h6v-6h6v6h6V9z"/>
